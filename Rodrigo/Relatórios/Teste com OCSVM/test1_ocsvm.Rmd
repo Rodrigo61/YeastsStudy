@@ -1,0 +1,130 @@
+---
+title: "OCSVM-1test"
+author: "Rodrigo"
+date: "November 15, 2016"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Proposta
+Queremos testar a eficiência de um classificador **one-class SVM**(OCLSVM) [1]. A ideia é utilizar um grande número de observações como exemplo da classe positiva e mostrar que, desse modo, é possível classificar com grande **precisão e acurácia** (isso é melhor discutido na conclusão) se uma levedura pertence ou não a uma determinada espécie.
+
+### Saccharomyces, a classe positiva
+A levedura *Saccharomyces cerevisiae* é uma das leveduras mais importantes no processo industrial.Por esse motivo, ela é a que possui a maior quantidade de observações no banco de dados do NYCY[2]. Utilizaremos essa levedura como objeto de estudo sobre a eficácia de um modelo OCSVM para reconhecer uma levedura através de seus padrões fisiológicos.
+
+## Dados
+Utilizamos scripts em Python e coletamos um grande número de observações entre 9 classes(espécies diferentes).
+```{r message=F, include=F}
+setwd('/home/rodrigo/Dropbox/UNICAMP/MC886/trabalho/ProjetoY/datasets')
+full_data = read.csv("YPDS_merge.csv", header=T)
+
+# removendo os indices das linhas
+full_data = full_data[,-1] 
+
+x_data = full_data[,-1]
+y_data = factor(full_data[,1])
+```
+
+Temos portanto as seguintes dimensões de dados
+```{r}
+dim(full_data)
+```
+
+## O problema dos dados faltantes
+Mesmo com um número tão expressivo de dados ainda temos o problema de dados faltantes. Os parâmetros utilizados dependem diretamente da facção ou não de experimentos de crescimento em determinadas condições, feitos em laboratório. Por isso, é comum encontrarmos observações muito completas, com quase todos os cenários testados, e encontrar outras muito incompletas e com quase todos os atributos faltantes. 
+
+Por isso resolvemos pegar um grande número de dados e remover a nosso critério aqueles com uma porcentagem muito grande de dados faltantes.
+
+
+### Imputacao pela moda
+Para poder rodar os algoritmos supervisionados durante o estudo foi preciso adotar alguma abordagem de correção dos dados faltantes. 
+Para resolver um atributo faltante em uma observação utilizamos como argumento que a moda da **classe** desse atributo seria uma boa abordagem, visto que acreditamos em um alto grau de similaridade as observações da mesma espécie.
+Além disso, mesmo que muitas das observações tenham que ser futuramente descartadas, pela grande porcentagem de atributos faltantes, não queremos desperdiçar informação delas. Por isso, levamos em consideração **todo o conjunto original** para calcular a moda de cada atributo de cada classe.
+
+Essa imputação foi feita através de um script em Python. Desse modo, temos dois arquivos CSV. Um original, com dados faltantes e um com todos os dados faltantes imputados.  Carregando os dados imputados.
+
+```{r}
+setwd('/home/rodrigo/Dropbox/UNICAMP/MC886/trabalho/ProjetoY/datasets')
+imputed_full_data = read.csv("YPDS_merge_imputado.csv", header=T)
+```
+
+```{r include = F}
+# retirando ID
+imputed_full_data = imputed_full_data[,-1]
+```
+
+### Removendo dados faltantes
+
+Agora vamos retirar todos as observações com mais de 10% de dados faltantes.
+```{r}
+pMiss = function(x){sum(is.na(x))/length(x)*100}
+
+percent = 10
+
+new_rows_idx = which(apply(x_data,1,pMiss) < 10)
+new_rows_idx_length = length(new_rows_idx)
+```
+
+Vamos trabalhar então com `r new_rows_idx_length` observações. 
+
+Agora que removemos o grosso das observações esparsas podemos remover as colunas com mais de 10% de dados faltantes.
+```{r}
+pMiss = function(x){sum(is.na(x))/length(x)*100}
+
+percent = 10
+
+new_cols_idx = which(apply(x_data[new_rows_idx,],2,pMiss) < 10)
+new_cols_idx_length = length(new_cols_idx)
+```
+
+Vamos trabalhar então com `r new_cols_idx_length` atributos.
+
+Então, vamos atualizar o nosso dataset para utilizar só observações e atributos com menos de 10% de dados faltantes.
+```{r}
+# Selecionando o novo dataset no conjunto total de dados imputados
+x_data = imputed_full_data[new_rows_idx,new_cols_idx]
+y_data = imputed_full_data[new_rows_idx,1]
+```
+
+Analisando esse novo dataset...
+```{r}
+length_x_data = dim(x_data)[1]
+# 0 é o ID da sacchraromyces
+length_sacchraromyces = length(which(y_data == 0))
+```
+
+Podemos ver que, dessas `r length_x_data` observações, `r length_sacchraromyces` são da espécie Saccharomyces, classe positiva.  
+
+## Conjunto de treino e teste
+Vamos utilizar agora, 250 das observações da espécie Saccharomyces para treino e o restante para compor o teste. O teste é composto por exemplos da classe positiva, Saccharomyces, e exemplos de outras classes negativas que serão classificadas como desconhecidas.
+```{r}
+x_saccharomyces_train = x_data[1:250,]
+
+x_test = x_data[250:nrow(x_data),]
+y_test = y_data[250:length(y_data)]
+```
+
+
+## Treinando o classificador one-class SVM
+
+```{r}
+library(e1071)
+
+svm_model = svm(
+                 x = x_saccharomyces_train, 
+                 y = NULL,
+                 scale = FALSE, 
+                 kernel="radial", 
+                 type="one-classification",
+                 nu=0.01)
+                  
+svm.pred = predict(svm_model, x_test)
+table(Predicted=svm.pred,Reference=y_test)
+```
+
+Isso nos dá uma acurácia de 0.9931034 e uma precisão de 0.9880952 para esse teste. É preciso destacar que a acurácia não é uma boa escolha para um problema tão desbalanceado, natural dos problemas OPEN-SET. Talvez fosse melhor avaliar com métricas como F-Measure [3]. 
+
+Além disso, não fizemos nenhuma procura por hiperparametros no nosso modelo. Isso também é algo que deve ser avaliado.

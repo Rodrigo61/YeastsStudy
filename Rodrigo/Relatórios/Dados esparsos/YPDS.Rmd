@@ -1,0 +1,70 @@
+---
+title: "YPDS"
+author: "Rodrigo"
+date: "November 4, 2016"
+output: html_document
+output_dir: "."
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Lendo os dados
+```{r message=F}
+setwd('/home/rodrigo/Dropbox/UNICAMP/MC886/trabalho/ProjetoY')
+full_data = read.csv("YPDS.csv", header=T)
+
+x_data = full_data[,-1]
+y_data = factor(full_data[,1])
+```
+
+
+## Dimensoes e características dos dados
+```{r message=F}
+dim(full_data)
+```
+
+Balanceamento das classes.
+```{r message=F}
+summary(y_data)
+```
+Podemos perceber que os dados estão levemente balanceados, distoando apenas na classe 1(29%) e 2(8%).
+
+Verificando os dados faltantes.
+```{r}
+sum(is.na(x_data))/(dim(x_data)[1]*dim(x_data)[2])
+```
+Os dados faltantes representam quase 15% dos nossos dados.
+
+## O problema dos dados faltantes
+Podemos ver a porcentagem de dados faltantes nas features(colunas) e nas observacoes(linhas).
+```{r include=F}
+pMiss <- function(x){sum(is.na(x))/length(x)*100}
+```
+
+Podemos ver a porcentagem de dados faltantes em cada feature.
+```{r message=F}
+apply(x_data,2,pMiss)
+```
+Como podemos ver, 34 colunas com mais de 5% de NA. 22 colunas com mais de 10%. 14 colunas com mais de 15% de NA.
+
+Podemos ver a porcentagem de dados faltantes em cada obeservacao.
+```{r message=F}
+apply(x_data,1,pMiss)
+```
+```{r include=F}
+row_5 = row_NA_percent = length(which(apply(x_data,1,pMiss) > 5))/dim(x_data)[1]
+row_10 = row_NA_percent = length(which(apply(x_data,1,pMiss) > 10))/dim(x_data)[1]
+row_15 = row_NA_percent = length(which(apply(x_data,1,pMiss) > 15))/dim(x_data)[1]
+```
+Temos então `r row_5` de linhas com mais de 5% de NA.
+Temos então `r row_10` de linhas com mais de 10% de NA.
+Temos então `r row_15` de linhas com mais de 15% de NA.
+
+Aqui temos um plot simples com o histograma das colunas com maior número de dados faltantes. Também temos uma ordenacão das mesmas para facilitar a compreensão delas.
+```{r warning=F, message = F}
+library(VIM)
+aggr_plot <- aggr(x_data, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(x_data), cex.axis=.7, gap=3, ylab=c("Histogram of missing data","Pattern"))
+```
+
